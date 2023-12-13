@@ -70,9 +70,9 @@ def create_audio(
 def parallel_transcribe_audio(
     file_paths,
     client,
-    language,
-    prompt,
-    response_format,
+    language="en",
+    prompt="",
+    response_format="text",
     max_workers=10,
 ):
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
