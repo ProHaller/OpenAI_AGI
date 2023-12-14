@@ -6,15 +6,16 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 # Load environment variables
-load_dotenv()
+def intitialize_openai():
+    load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_ORG = os.getenv("OPENAI_ORG")
-openai.api_key = OPENAI_API_KEY
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    OPENAI_ORG = os.getenv("OPENAI_ORG")
+    openai.api_key = OPENAI_API_KEY
 
-client = OpenAI(
-    organization=OPENAI_ORG,
-)
+    client = OpenAI(
+        organization=OPENAI_ORG,
+    )
 
 
 def initialize_tokenizer(tokenizer_name):
@@ -62,6 +63,7 @@ def openai_completion(model, input_text, system_prompt, format="text", temperatu
     :param temperature: The temperature setting for the completion (default 0 for deterministic responses).
     :return: The generated text from the API.
     """
+    intitialize_openai()
     response = client.chat.completions.create(
         model=model,
         temperature=temperature,
