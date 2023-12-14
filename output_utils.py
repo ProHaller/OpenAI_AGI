@@ -22,7 +22,7 @@ def save_to_file(content, filename, output_directory, filetype="txt"):
                 json.dump(content, file, ensure_ascii=False, indent=4)
             else:
                 file.write(str(content))
-        print("\n" * 3, f"File saved: {full_filename}.", "\n" * 3)
+        print(f"File saved: {full_filename}.")
         return True
     except Exception as e:
         print(f"Error saving file {full_filename}: {e}")

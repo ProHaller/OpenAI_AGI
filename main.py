@@ -1,13 +1,14 @@
 import argparse
 import json
 import os
+from pathlib import Path
+
+from dotenv import dotenv_values, load_dotenv
+
 import audio_utils
 import openai_audio
 import openai_text
 import output_utils
-
-from dotenv import dotenv_values, load_dotenv
-from pathlib import Path
 
 
 # Function to ask user for environment variable
@@ -222,13 +223,8 @@ def main():
     segments = audio_utils.segment_audio(
         trimmed_audio, segment_duration_ms, os.path.dirname(args.file)
     )
-    # print(
-    #     "\n" * 3,
-    #     f"The audio file has been segmented if the following segments: {list(enumerate(segments, start=1))}",
-    # )
     print(
-        "\n" * 2,
-        "..............Audio file segmented, transcribing..............",
+        "Audio file segmented.\nTranscribing..............",
     )
     # Transcribe each audio segment
     transcription = openai_audio.parallel_transcribe_audio(
@@ -268,8 +264,7 @@ def main():
         # Concatenate transcriptions
         clean_full_transcription = "\n".join(clean_transcriptions)
         print(
-            "\n" * 2,
-            f"This is the cleaned transcription:\n\n {clean_full_transcription}",
+            f"This is the cleaned transcription:\n\n{clean_full_transcription}",
         )
 
         # Output the results
