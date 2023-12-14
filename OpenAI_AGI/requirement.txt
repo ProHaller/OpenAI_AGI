@@ -1,7 +1,0 @@
-customtkinter
-pydub
-openai
-python-dotenv
-tiktoken
-concurrent
-argparse
