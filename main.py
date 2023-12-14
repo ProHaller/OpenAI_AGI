@@ -1,12 +1,13 @@
 import argparse
 import json
 import os
-
 import audio_utils
 import openai_audio
 import openai_text
 import output_utils
+
 from dotenv import dotenv_values, load_dotenv
+from pathlib import Path
 
 
 # Function to ask user for environment variable
@@ -203,7 +204,7 @@ def main():
     client = openai_audio.init_openai_client(openai_api_key, openai_org)
 
     if args.output_directory is None:
-        args.output_directory = "/Users/Haller/Downloads/"
+        args.output_directory = str(Path.home() / "Downloads")
     print(f"The output_directory is defaulting to {args.output_directory}.")
     if args.file is None:
         openai_audio.create_audio(
