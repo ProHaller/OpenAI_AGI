@@ -3,12 +3,23 @@ import json
 import os
 from pathlib import Path
 
+from colorama import Fore, Style, init
 from dotenv import dotenv_values, load_dotenv
 
 import audio_utils
 import openai_audio
 import openai_text
 import output_utils
+
+# Initialize colorama
+init(autoreset=True)
+# Print text in different colors
+# print(f"{Fore.RED}This is red text")
+# print(f"{Fore.GREEN}This is green text")
+# print(f"{Fore.YELLOW}This is yellow text")
+# print(f"{Fore.BLUE}This is blue text")
+# print(f"{Fore.MAGENTA}This is magenta text")
+# print(f"{Fore.CYAN}This is cyan text")
 
 
 # Function to ask user for environment variable
@@ -190,122 +201,128 @@ def load_prompts(prompts_file_path):
 prompts = load_prompts("prompts.json")
 
 
-def main():
+def parse_arguments():
     parser = create_parser()
     setup_parser(parser)
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def load_environment_variables():
     check_env_variables()
-
-    # Load environment variables
     openai_api_key = os.getenv("OPENAI_API_KEY")
     openai_org = os.getenv("OPENAI_ORG")
+    return openai_api_key, openai_org
 
-    # Initialize OpenAI client
-    client = openai_audio.init_openai_client(openai_api_key, openai_org)
 
+def initialize_openai_client(api_key, org):
+    return openai_audio.init_openai_client(api_key, org)
+
+
+def setup_output_directory(args):
     if args.output_directory is None:
         args.output_directory = str(Path.home() / "Downloads")
     print(f"The output_directory is defaulting to {args.output_directory}.")
+    return args.output_directory
+
+
+def process_audio(args, client, prompts):
     if args.file is None:
         openai_audio.create_audio(
-            (input("What is the script of the Audio?\n--> ")), args.output_directory
+            input("What is the script of the Audio?\n--> "), args.output_directory
         )
         exit()
 
     audio_prompt = input("\aDescribe the audio file (optional):\n-> ")
-    cleaning_prompt = prompts["punctuation_assistant"]
     audio_file_path = args.file
-    trimmed_audio, trimmed_filename = audio_utils.trim_start(audio_file_path)
+    trimmed_audio, _ = audio_utils.trim_start(audio_file_path)
+    segments, segments_dir = audio_utils.segment_audio(
+        trimmed_audio, args.segment_duration_sec * 1000, os.path.dirname(args.file)
+    )
 
-    # Define segment duration (e.g., 1 minute)
-    segment_duration_ms = args.segment_duration_sec * 1000
-    segments = audio_utils.segment_audio(
-        trimmed_audio, segment_duration_ms, os.path.dirname(args.file)
-    )
+    print("Audio file segmented.\nTranscribing..............")
     print(
-        "Audio file segmented.\nTranscribing..............",
+        f"{Fore.BLUE}Segments: {segments}\nclient: {client}\nlanguage: {args.language}\naudio prompt: {audio_prompt}\nformat: {args.format}"
     )
-    # Transcribe each audio segment
     transcription = openai_audio.parallel_transcribe_audio(
-        segments,
-        client,
-        language=args.language,
-        prompt=audio_prompt,
-        response_format=args.format,
-    )
-
-    print(
-        "\n",
-        f"This is the transcription of {args.file}({args.language}):\n\n\
-        {transcription}",
+        segments, client, args.language, audio_prompt, args.format
     )
     output_utils.save_to_file(transcription, args.file, args.output_directory)
+    return transcription, audio_prompt
 
-    clean_full_transcription = ""
-    # Process the text
-    if args.cleaning is True:
-        # Initialize Tokenizer
-        tokenizer_name = args.tokenizer_name
-        tokenizer = openai_text.initialize_tokenizer(tokenizer_name)
 
-        # Clean transcription
-        clean_transcriptions = []
-        chunks = openai_text.create_chunks(transcription, 2000, tokenizer)
-        text_chunks = [tokenizer.decode(chunk) for chunk in chunks]
-        for chunk in text_chunks:
-            clean_transcription = openai_text.openai_completion(
-                "gpt-3.5-turbo",
-                chunk,
-                cleaning_prompt,
-            )
-            clean_transcriptions.append(clean_transcription)
+def clean_transcription(transcription, args, prompts):
+    if not args.cleaning:
+        return transcription
 
-        # Concatenate transcriptions
-        clean_full_transcription = "\n".join(clean_transcriptions)
-        print(
-            f"This is the cleaned transcription:\n\n{clean_full_transcription}",
+    tokenizer = openai_text.initialize_tokenizer(args.tokenizer_name)
+    clean_transcriptions = []
+    chunks = openai_text.create_chunks(transcription, 2000, tokenizer)
+    cleaning_prompt = prompts["punctuation_assistant"]
+
+    for chunk in chunks:
+        clean_transcription = openai_text.openai_completion(
+            "gpt-3.5-turbo",
+            tokenizer.decode(chunk),
+            cleaning_prompt,
         )
+        clean_transcriptions.append(clean_transcription)
 
-        # Output the results
-        output_utils.save_to_file(
-            clean_full_transcription,
-            f"clean_{os.path.basename(args.file)}",
-            args.output_directory,
-        )
+    cleaned_transcription = "\n".join(clean_transcriptions)
+    output_utils.save_to_file(
+        cleaned_transcription,
+        f"clean_{os.path.basename(args.file)}",
+        args.output_directory,
+    )
+    return cleaned_transcription
 
-    # Secretary note
-    # todo Probably should externalize secretary note
-    # todo Need to define secretary_prompt somewhere.
+
+def create_secretary_note(args, cleaned_transcription, transcription, prompts):
     secretary_prompt = prompts["roland_haller_assistant"] + input(
         "\aSecretary instructions : \n-> "
     )
     secretary_note = openai_text.openai_completion(
         args.model,
-        (clean_full_transcription if clean_full_transcription else transcription),
+        cleaned_transcription or transcription,
         secretary_prompt,
         "json_object",
         args.temperature,
     )
+    return output_utils.json_to_obsidian(secretary_note)
+
+
+def main():
+    args = parse_arguments()
+    openai_api_key, openai_org = load_environment_variables()
+    client = initialize_openai_client(openai_api_key, openai_org)
+
+    setup_output_directory(args)
+    transcription, audio_prompt = process_audio(args, client, prompts)
+    cleaned_transcription = clean_transcription(transcription, args, prompts)
+
     (
         secretary_note_file,
         secretary_note_front,
         secretary_note_body,
-    ) = output_utils.json_to_obsidian(secretary_note)
-    user_input = input(
+    ) = create_secretary_note(args, cleaned_transcription, transcription, prompts)
+    if input(
         "\nDo you want to save this note as an obsidian.md note? \n-> "
-    ).lower()
-    if user_input in ["y", "yes", "ok", "oui", "sure", "pourquoi pas", "aller"]:
-        # Output the results
-        secretary_note_filetype = "md"
+    ).lower() in ["y", "yes", "ok", "oui", "sure", "pourquoi pas", "aller"]:
         output_utils.save_to_file(
             str(secretary_note_front + secretary_note_body),
             secretary_note_file,
             args.output_directory,
-            secretary_note_filetype,
+            "md",
         )
-    user_input = input("\nShould we clean up the audio segments?\n-> ").lower()
-    if user_input in ["y", "yes", "ok", "oui", "sure", "pourquoi pas", "aller"]:
+
+    if input("\nShould we clean up the audio segments?\n-> ").lower() in [
+        "y",
+        "yes",
+        "ok",
+        "oui",
+        "sure",
+        "pourquoi pas",
+        "aller",
+    ]:
         audio_utils.cleanup_directory(args.output_directory)
 
 

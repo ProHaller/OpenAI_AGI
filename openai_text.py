@@ -5,6 +5,7 @@ import tiktoken
 from dotenv import load_dotenv
 from openai import OpenAI
 
+
 # Load environment variables
 def intitialize_openai():
     load_dotenv()
@@ -16,6 +17,7 @@ def intitialize_openai():
     client = OpenAI(
         organization=OPENAI_ORG,
     )
+    return client
 
 
 def initialize_tokenizer(tokenizer_name):
@@ -53,7 +55,13 @@ def create_chunks(text, chunk_size, tokenizer):
         i = j
 
 
-def openai_completion(model, input_text, system_prompt, format="text", temperature=0):
+def openai_completion(
+    model: str,
+    input_text: str,
+    system_prompt: str,
+    format="text",
+    temperature: float = 0,
+):
     """
     Generates a response from OpenAI's API based on the given model, input text, and system prompt.
 
@@ -63,7 +71,7 @@ def openai_completion(model, input_text, system_prompt, format="text", temperatu
     :param temperature: The temperature setting for the completion (default 0 for deterministic responses).
     :return: The generated text from the API.
     """
-    intitialize_openai()
+    client = intitialize_openai()
     response = client.chat.completions.create(
         model=model,
         temperature=temperature,
