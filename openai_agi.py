@@ -220,7 +220,7 @@ def initialize_openai_client(api_key, org):
 
 def setup_output_directory(args):
     if args.output_directory is None:
-        args.output_directory = str(Path.home() / "Downloads")
+        args.output_directory = str(Path.home() / "Downloads" / "Transcription")
     print(f"The output_directory is defaulting to {args.output_directory}.")
     return args.output_directory
 

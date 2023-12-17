@@ -3,5 +3,5 @@ pydub
 openai
 python-dotenv
 tiktoken
-concurrent
+futures
 argparse
