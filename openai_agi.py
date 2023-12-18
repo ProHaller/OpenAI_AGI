@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from tkinter import messagebox
 
 from colorama import Fore, Style, init
 from dotenv import dotenv_values, load_dotenv
@@ -23,44 +24,67 @@ init(autoreset=True)
 
 
 # Function to ask user for environment variable
-def ask_env_variable(var_name):
-    value = input(f"Please enter your {var_name}: ")
-    return value
+def ask_env_variable(var_name, mode="cli", parent=None):
+    if mode == "gui" and parent is not None:
+        # GUI mode
+        print(f"Please set the variable: {var_name}")
+    else:
+        # CLI mode
+        return input(f"Please enter your {var_name}: ")
 
 
-def check_env_variables():
+def save_env_variable_gui(env_vars_values: tuple):
+    with open(".env", "w", encoding="utf-8") as env_file:
+        for var, value in env_vars_values:
+            env_file.write(f"{var}={value}\n")
+    check_env_variables()
+
+
+def check_env_variables(mode="cli", parent=None):
     required_env_vars = ["OPENAI_API_KEY", "OPENAI_ORG"]
     missing_vars = {}
 
-    # Load existing .env file
+    # Create .env file if it doesn't exist
+    if not os.path.exists(".env"):
+        open(".env", "a", encoding="utf-8").close()
+
     load_dotenv()
 
-    # Identify missing environment variables
     for var in required_env_vars:
-        if not os.getenv(var):
-            value = ask_env_variable(var)
-            missing_vars[var] = value
+        env_value = os.getenv(var)
+        # Check if the environment variable is missing, empty, or set to the string "None"
+        if env_value in [None, "", "None"]:
+            value = ask_env_variable(var, mode, parent)
+            if value:  # Only update if a non-empty value is provided
+                missing_vars[var] = value
 
-    # Update .env file if there are missing variables
     if missing_vars:
-        # Read current .env file content
         env_vars = dotenv_values(".env")
         env_vars.update(missing_vars)
 
-        # Write updated environment variables to .env file
         with open(".env", "w", encoding="utf-8") as env_file:
             for var, value in env_vars.items():
                 env_file.write(f"{var}={value}\n")
 
-        # Reload the .env file to update environment variables
         load_dotenv()
 
-        # Verify that the variables have been set
-        for var in missing_vars:
-            if not os.getenv(var):
-                raise ValueError(f"Failed to set environment variable: {var}")
-
-    print("All required environment variables are set.")
+    # Verification after updating .env file
+    all_vars_set = all(
+        os.getenv(var) not in [None, "", "None"] for var in required_env_vars
+    )
+    if all_vars_set:
+        if mode == "cli":
+            print("All required environment variables are set.")
+        else:
+            messagebox.showinfo("Info", "All required environment variables are set.")
+        return all_vars_set
+    if mode == "cli":
+        print("Not all environment variables are set correctly.")
+    else:
+        messagebox.showerror(
+            "Error", "Not all environment variables are set correctly."
+        )
+    return all_vars_set
 
 
 def create_parser():
@@ -221,15 +245,18 @@ def initialize_openai_client(api_key, org):
 def setup_output_directory(args):
     if args.output_directory is None:
         args.output_directory = str(Path.home() / "Downloads" / "Transcription")
+    output_dir = Path(args.output_directory)
+    output_dir.mkdir(parents=True, exist_ok=True)
     print(f"The output_directory is defaulting to {args.output_directory}.")
     return args.output_directory
 
 
-def process_audio(args, client, prompts):
-    if args.file is None:
-        openai_audio.create_audio(
-            input("What is the script of the Audio?\n--> "), args.output_directory
-        )
+def process_audio(client, prompts, args):
+    if args:
+        if args.file is None:
+            openai_audio.create_audio(
+                input("What is the script of the Audio?\n--> "), args.output_directory
+            )
         exit()
 
     audio_prompt = input("\aDescribe the audio file (optional):\n-> ")
@@ -296,7 +323,7 @@ def main():
     client = initialize_openai_client(openai_api_key, openai_org)
 
     setup_output_directory(args)
-    transcription, audio_prompt = process_audio(args, client, prompts)
+    transcription = process_audio(client, prompts, args)
     cleaned_transcription = clean_transcription(transcription, args, prompts)
 
     (
