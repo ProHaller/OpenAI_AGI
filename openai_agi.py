@@ -221,10 +221,6 @@ def load_prompts(prompts_file_path):
     return prompt_list
 
 
-# Assuming the file is named 'prompts.json' in the same directory as your script
-prompts = load_prompts("prompts.json")
-
-
 def parse_arguments():
     parser = create_parser()
     setup_parser(parser)
@@ -257,24 +253,26 @@ def process_audio(client, prompts, args):
             openai_audio.create_audio(
                 input("What is the script of the Audio?\n--> "), args.output_directory
             )
-        exit()
+            exit()
 
-    audio_prompt = input("\aDescribe the audio file (optional):\n-> ")
-    audio_file_path = args.file
-    trimmed_audio, _ = audio_utils.trim_start(audio_file_path)
-    segments, segments_dir = audio_utils.segment_audio(
-        trimmed_audio, args.segment_duration_sec * 1000, os.path.dirname(args.file)
-    )
+        audio_prompt = input("\aDescribe the audio file (optional):\n-> ")
+        audio_file_path = args.file
+        trimmed_audio, _ = audio_utils.trim_start(audio_file_path)
+        segments, segments_dir = audio_utils.segment_audio(
+            trimmed_audio,
+            args.segment_duration_sec * 1000,
+            os.path.dirname(args.output_directory),
+        )
 
-    print("Audio file segmented.\nTranscribing..............")
-    print(
-        f"{Fore.BLUE}Segments: {segments}\nclient: {client}\nlanguage: {args.language}\naudio prompt: {audio_prompt}\nformat: {args.format}"
-    )
-    transcription = openai_audio.parallel_transcribe_audio(
-        segments, client, args.language, audio_prompt, args.format
-    )
-    output_utils.save_to_file(transcription, args.file, args.output_directory)
-    return transcription, audio_prompt
+        print("Audio file segmented.\nTranscribing..............")
+        print(
+            f"{Fore.BLUE}Segments: {segments}\nclient: {client}\nlanguage: {args.language}\naudio prompt: {audio_prompt}\nformat: {args.format}"
+        )
+        transcription = openai_audio.parallel_transcribe_audio(
+            segments, client, args.language, audio_prompt, args.format
+        )
+        output_utils.save_to_file(transcription, args.file, args.output_directory)
+        return transcription, audio_prompt, segments_dir
 
 
 def clean_transcription(transcription, args, prompts):
@@ -284,7 +282,7 @@ def clean_transcription(transcription, args, prompts):
     tokenizer = openai_text.initialize_tokenizer(args.tokenizer_name)
     clean_transcriptions = []
     chunks = openai_text.create_chunks(transcription, 2000, tokenizer)
-    cleaning_prompt = prompts["punctuation_assistant"]
+    cleaning_prompt = prompts["Punctuation assistant"]
 
     for chunk in chunks:
         clean_transcription = openai_text.openai_completion(
@@ -304,7 +302,7 @@ def clean_transcription(transcription, args, prompts):
 
 
 def create_secretary_note(args, cleaned_transcription, transcription, prompts):
-    secretary_prompt = prompts["roland_haller_assistant"] + input(
+    secretary_prompt = prompts["Personal assistant"] + input(
         "\aSecretary instructions : \n-> "
     )
     secretary_note = openai_text.openai_completion(
@@ -319,18 +317,26 @@ def create_secretary_note(args, cleaned_transcription, transcription, prompts):
 
 def main():
     args = parse_arguments()
+    print("parsed args")
     openai_api_key, openai_org = load_environment_variables()
+    print("set env")
     client = initialize_openai_client(openai_api_key, openai_org)
-
+    print("set client")
     setup_output_directory(args)
-    transcription = process_audio(client, prompts, args)
+    print("set output dir process to prompts loading")
+    prompts = load_prompts("prompts.json")
+    print("Loaded prompts process to transcription")
+    transcription, audio_prompt, segments_dir = process_audio(client, prompts, args)
+    print("transcription done")
+    print(transcription)
     cleaned_transcription = clean_transcription(transcription, args, prompts)
-
+    print("transcription cleaning done\n going to secretary note")
     (
         secretary_note_file,
         secretary_note_front,
         secretary_note_body,
     ) = create_secretary_note(args, cleaned_transcription, transcription, prompts)
+    print("secretary note done. going to save")
     if input(
         "\nDo you want to save this note as an obsidian.md note? \n-> "
     ).lower() in ["y", "yes", "ok", "oui", "sure", "pourquoi pas", "aller"]:
@@ -340,6 +346,7 @@ def main():
             args.output_directory,
             "md",
         )
+    print("saved, …cleaning")
 
     if input("\nShould we clean up the audio segments?\n-> ").lower() in [
         "y",
@@ -350,7 +357,8 @@ def main():
         "pourquoi pas",
         "aller",
     ]:
-        audio_utils.cleanup_directory(args.output_directory)
+        audio_utils.cleanup_directory(segments_dir)
+    print(f"Cleaning {segments_dir}")
 
 
 if __name__ == "__main__":

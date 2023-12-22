@@ -27,6 +27,7 @@ def trim_start(filepath):
     start_trim = milliseconds_until_sound(audio)
     trimmed_audio = audio[start_trim:]
     trimmed_filename = trimmed_directory / f"trimmed_{path.name}"
+    print(trimmed_filename)
     trimmed_audio.export(trimmed_filename, format="wav")
     trimmed_audio = AudioSegment.from_file(trimmed_filename)
     shutil.rmtree(trimmed_directory)
