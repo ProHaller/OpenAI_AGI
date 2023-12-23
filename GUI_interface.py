@@ -13,11 +13,9 @@ from tkinter import messagebox
 import customtkinter as ctk
 from packaging.version import parse
 
-import audio_utils
 import openai_agi
 import openai_audio
 import openai_text
-import output_utils
 
 # Set the theme for customtkinter
 ctk.set_appearance_mode("Dark")
